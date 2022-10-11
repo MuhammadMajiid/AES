@@ -16,39 +16,43 @@ module Rounds (
 
     output reg  [0:127] enc_data,
     output reg  [3:0]   round_num,
-    output wire         valid_flag
+    output reg          valid_flag
 );
 
 //-----------------Control Signals-----------------\\
 reg [1:0]   state;
 reg [3:0]   count;
+reg [0:7]   sbox [0:255];
 reg [0:127] data_tobox;
 reg [0:127] data_sub;
 reg [0:127] data_shifted;
 reg [0:127] data_mixed;
-reg [0:7]   sbox [0:255];
 
 //-----------------State encoding-----------------\\
-localparam IDLE   = 2'b00,
-           ROUNDS = 2'b01,
-           FINAL  = 2'b11;
+localparam IDLE      = 2'b00,
+           INITIALLY = 2'b01,
+           ROUNDS    = 2'b11,
+           FINAL     = 2'b10;
 
 //-----------------AES FSM-----------------\\
 always @(posedge clk, negedge reset_n) 
 begin
     if (!reset_n) 
     begin
-        state       <= IDLE;
-        count       <= 4'd0;
-        round_num   <= 4'd0;
-        enc_data    <= 128'b0;
+        state         <= IDLE;
+        count         <= 4'd0;
+        round_num     <= 4'd0;
     end
     else 
     begin
         case (state)
             IDLE:
             begin
-                data_tobox <= plain_text ^ round_key;    //  The initial ARK
+                state            <= INITIALLY;
+            end
+
+            INITIALLY:
+            begin
                 if (start) 
                 begin
                     state        <= ROUNDS;
@@ -57,33 +61,28 @@ begin
                 begin
                     state        <= IDLE;
                 end
+                round_num        <= round_num + 4'd1;
             end
 
             ROUNDS:
             begin
-                if ((!count[2:1]) && (count[3] & count[0]))
-                //  equivalent to count == 9, but to avoid xors.
+                round_num        <= round_num + 4'd1;
+                if (count == 4'd9)
                 begin
                     state        <= FINAL;
                 end
                 else 
                 begin
-                    data_sub     <= data_sbox(data_tobox);
-                    data_shifted <= shift_rows(data_sub);
-                    data_mixed   <= mixed_cols(data_shifted);
-                    data_tobox   <= add_rnd_key(data_mixed,round_key);
-
-                    round_num    <= round_num + 4'd1;
+                    count        <= count + 4'd1;
                     state        <= ROUNDS;
                 end
-                count            <= count + 4'd1;
             end
 
             FINAL:
             begin
-                data_sub         <= data_sbox(data_tobox);
-                data_shifted     <= shift_rows(data_sub);
-                enc_data         <= add_rnd_key(data_shifted,round_key);
+                count            <= 4'd0;
+                round_num        <= 4'd0;
+                state            <= IDLE;
             end
 
             default: state       <= IDLE;
@@ -91,14 +90,135 @@ begin
     end
 end
 
-//-----------------Valid Flag logic-----------------\\
-assign valid_flag = ((count[3] & count[1]) && (!(count[2] | count[0])));  //  equivalent to count == 10, but to avoid xors.
-                    
+always @(round_num, state,reset_n)
+begin
+    if(!reset_n) 
+    begin
+        data_tobox    = 128'd0;
+        data_sub      = 128'd0;
+        data_shifted  = 128'd0;
+        data_mixed    = 128'd0;
+    end
+    else if (start & clk) 
+    begin
+        if (state == INITIALLY) 
+        begin
+            data_tobox   = add_rnd_key(plain_text,round_key);    //  The initial ARK
+            data_sub     = data_sbox(data_tobox);
+            data_shifted = shift_rows(data_sub);
+            data_mixed   = mixed_cols(data_shifted);
+        end
+        else if (state == ROUNDS) 
+        begin
+            data_tobox   = add_rnd_key(data_mixed,round_key);
+            data_sub     = data_sbox(data_tobox);
+            data_shifted = shift_rows(data_sub);
+            data_mixed   = mixed_cols(data_shifted);
+            data_tobox   = add_rnd_key(data_mixed,round_key);
+        end
+        else 
+        begin
+            data_sub         = data_sbox(data_tobox);
+            data_shifted     = shift_rows(data_sub);
+            data_tobox       = add_rnd_key(data_shifted,round_key); //data_shifted ^ round_key
+        end
+    end
+    else 
+    begin
+        data_tobox    = 128'd0;
+        data_sub      = 128'd0;
+        data_shifted  = 128'd0;
+        data_mixed    = 128'd0;
+    end
+    
+end
+
+//-----------------Output logic-----------------\\
+always @(*) 
+begin
+    valid_flag = (state == FINAL);
+    enc_data   = (valid_flag)? data_tobox : 128'b0;
+end
+
+
 ////////////////////////////////////\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 //--------------------------------------------------------------------\\
 //////////////-----------------Functions-----------------\\\\\\\\\\\\\\\
 //--------------------------------------------------------------------\\
 ////////////////////////////////////\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+
+//------------>>> Shift rows function.
+function  [0:127]  shift_rows;
+    input [0:127] data_sub;
+    begin
+        // //-----------------Original-----------------\\
+        // first_row  = {data_sbox[0:7],data_sbox[32:39],data_sbox[64:71],data_sbox[96:103]};
+        // second_row = {data_sbox[8:15],data_sbox[40:47],data_sbox[72:79],data_sbox[104:111]};
+        // third_row  = {data_sbox[16:23],data_sbox[48:55],data_sbox[80:87],data_sbox[112:119]};
+        // fourth_row = {data_sbox[24:31],data_sbox[56:63],data_sbox[88:95],data_sbox[120:127]};
+        shift_rows = {
+        data_sub[0:7],    data_sub[40:47],   data_sub[80:87],   data_sub[120:127], 
+        data_sub[32:39],  data_sub[72:79],   data_sub[112:119], data_sub[24:31],
+        data_sub[64:71],  data_sub[104:111], data_sub[16:23],   data_sub[56:63],
+        data_sub[96:103], data_sub[8:15],    data_sub[48:55],   data_sub[88:95]
+    };
+    end
+endfunction
+
+//------------>>> Mix coloumns function.
+function  [0:7] mulByTwo;
+    input [0:7] arg;
+    begin
+        if(arg[7]) mulByTwo = ((arg << 1) ^ 8'h1b);
+        else mulByTwo = arg << 1;
+    end
+endfunction
+
+function  [0:7] mulByThree;
+    input [0:7] arg;
+    begin
+        mulByThree = mulByTwo(arg) ^ arg;
+    end
+endfunction
+
+function  [0:127] mixed_cols;
+    input [0:127] data_shifted;
+    begin
+//-----------------First coloumn-----------------\\
+    mixed_cols[0:7]     = (mulByTwo(data_shifted[0:7]) ^ mulByThree(data_shifted[8:15]) ^ data_shifted[16:23] ^ data_shifted[24:31]);  // s(0,0)
+    mixed_cols[8:15]    = (data_shifted[0:7] ^ mulByTwo(data_shifted[8:15]) ^ mulByThree(data_shifted[16:23]) ^ data_shifted[24:31]);  // s(1,0) 
+    mixed_cols[16:23]   = (data_shifted[0:7] ^ data_shifted[8:15] ^ mulByTwo(data_shifted[16:23]) ^ mulByThree(data_shifted[24:31]));  // s(2,0)
+    mixed_cols[24:31]   = (mulByThree(data_shifted[0:7]) ^ data_shifted[8:15] ^ data_shifted[16:23] ^ mulByTwo(data_shifted[24:31]));  // s(3,0)
+    
+//-----------------Second coloumn-----------------\\
+    mixed_cols[32:39]   = (mulByTwo(data_shifted[32:39]) ^ mulByThree(data_shifted[40:47]) ^ data_shifted[48:55] ^ data_shifted[56:63]);
+    mixed_cols[40:47]   = (data_shifted[32:39] ^ mulByTwo(data_shifted[40:47]) ^ mulByThree(data_shifted[48:55]) ^ data_shifted[56:63]);
+    mixed_cols[48:55]   = (data_shifted[32:39] ^ data_shifted[40:47] ^ mulByTwo(data_shifted[48:55]) ^ mulByThree(data_shifted[56:63]));
+    mixed_cols[56:63]   = (mulByThree(data_shifted[32:39]) ^ data_shifted[40:47] ^ data_shifted[48:55] ^ mulByTwo(data_shifted[56:63]));
+
+//-----------------Third coloumn-----------------\\
+    mixed_cols[64:71]   = (mulByTwo(data_shifted[64:71]) ^ mulByThree(data_shifted[72:79]) ^ data_shifted[80:87] ^ data_shifted[88:95]);
+    mixed_cols[72:79]   = (data_shifted[64:71] ^ mulByTwo(data_shifted[72:79]) ^ mulByThree(data_shifted[80:87]) ^ data_shifted[88:95]);
+    mixed_cols[80:87]   = (data_shifted[64:71] ^ data_shifted[72:79] ^ mulByTwo(data_shifted[80:87]) ^ mulByThree(data_shifted[88:95]));
+    mixed_cols[88:95]   = (mulByThree(data_shifted[64:71]) ^ data_shifted[72:79] ^ data_shifted[80:87] ^ mulByTwo(data_shifted[88:95]));
+
+//-----------------Fourth coloumn-----------------\\
+    mixed_cols[96:103]  = (mulByTwo(data_shifted[96:103]) ^ mulByThree(data_shifted[104:111]) ^ data_shifted[112:119] ^ data_shifted[120:127]);
+    mixed_cols[104:111] = (data_shifted[96:103] ^ mulByTwo(data_shifted[104:111]) ^ mulByThree(data_shifted[112:119]) ^ data_shifted[120:127]);
+    mixed_cols[112:119] = (data_shifted[96:103] ^ data_shifted[104:111] ^ mulByTwo(data_shifted[112:119]) ^ mulByThree(data_shifted[120:127]));
+    mixed_cols[120:127] = (mulByThree(data_shifted[96:103]) ^ data_shifted[104:111] ^ data_shifted[112:119] ^ mulByTwo(data_shifted[120:127]));
+    end
+endfunction
+
+//------------>>> Add Round Key function.
+function  [0:127] add_rnd_key;
+    input [0:127] data_mixed;
+    input [0:127] round_key;
+    begin
+    add_rnd_key = round_key ^ data_mixed;
+    end
+endfunction
 
 //------------>>> Sbox Sub bytes function.
 function  [0:127] data_sbox;
@@ -380,60 +500,6 @@ function  [0:127] data_sbox;
         data_sbox[16 : 23] = sbox[data_tobox[16 : 23]];
         data_sbox[08 : 15] = sbox[data_tobox[08 : 15]];
         data_sbox[00 : 07] = sbox[data_tobox[00 : 07]];
-    end
-endfunction
-
-//------------>>> Shift rows function.
-function  [0:127]  shift_rows;
-    input [0:127] data_sub;
-    begin
-
-    shift_rows = {
-    data_sub[0:7],     data_sub[32:39],   data_sub[64:71],   data_sub[96:103],  //  first row shifted by zero bytes
-    data_sub[40:47],   data_sub[72:79],   data_sub[104:111], data_sub[8:15],    //  second row shifted by one bytes
-    data_sub[80:87],   data_sub[112:119], data_sub[16:23],   data_sub[48:55],   //  third row shifted by two bytes
-    data_sub[120:127], data_sub[24:31],   data_sub[56:63],   data_sub[88:95]    //  fourth row shifted by three bytes
-    };
-    end
-endfunction
-
-//------------>>> Mix coloumns function.
-function  [0:127] mixed_cols;
-    input [0:127] data_shifted;
-    begin
-
-//-----------------First coloumn-----------------\\
-    mixed_cols[0:7]     = ((8'h02 * data_shifted[0:7]) ^ (8'h03 * data_shifted[8:15]) ^ (data_shifted[16:23]) ^ (data_shifted[24:31]));
-    mixed_cols[8:15]    = ((data_shifted[0:7]) ^ (8'h02 * data_shifted[8:15]) ^ (8'h03 * data_shifted[16:23]) ^ (data_shifted[24:31]));
-    mixed_cols[16:23]   = ((data_shifted[0:7]) ^ (data_shifted[8:15]) ^ (8'h02 * data_shifted[16:23]) ^ (8'h03 * data_shifted[24:31]));
-    mixed_cols[24:31]   = ((8'h03 * data_shifted[0:7]) ^ (data_shifted[8:15]) ^ (data_shifted[16:23]) ^ (8'h02 * data_shifted[24:31]));
-    
-//-----------------Second coloumn-----------------\\
-    mixed_cols[32:39]   = ((8'h02 * data_shifted[32:39]) ^ (8'h03 * data_shifted[40:47]) ^ (data_shifted[48:55]) ^ (data_shifted[56:63]));
-    mixed_cols[40:47]   = ((data_shifted[32:39]) ^ (8'h02 * data_shifted[40:47]) ^ (8'h03 * data_shifted[48:55]) ^ (data_shifted[56:63]));
-    mixed_cols[48:55]   = ((data_shifted[32:39]) ^ (data_shifted[40:47]) ^ (8'h02 * data_shifted[48:55]) ^ (8'h03 * data_shifted[56:63]));
-    mixed_cols[56:63]   = ((8'h03 * data_shifted[32:39]) ^ (data_shifted[40:47]) ^ (data_shifted[48:55]) ^ (8'h02 * data_shifted[56:63]));
-
-//-----------------Third coloumn-----------------\\
-    mixed_cols[64:71]   = ((8'h02 * data_shifted[64:71]) ^ (8'h03 * data_shifted[72:79]) ^ (data_shifted[80:87]) ^ (data_shifted[88:95]));
-    mixed_cols[72:79]   = ((data_shifted[64:71]) ^ (8'h02 * data_shifted[72:79]) ^ (8'h03 * data_shifted[80:87]) ^ (data_shifted[88:95]));
-    mixed_cols[16:23]   = ((data_shifted[64:71]) ^ (data_shifted[72:79]) ^ (8'h02 * data_shifted[80:87]) ^ (8'h03 * data_shifted[88:95]));
-    mixed_cols[80:87]   = ((8'h03 * data_shifted[64:71]) ^ (data_shifted[72:79]) ^ (data_shifted[80:87]) ^ (8'h02 * data_shifted[88:95]));
-
-//-----------------Fourth coloumn-----------------\\
-    mixed_cols[96:103]  = ((8'h02 * data_shifted[96:103]) ^ (8'h03 * data_shifted[104:111]) ^ (data_shifted[112:119]) ^ (data_shifted[120:127]));
-    mixed_cols[104:111] = ((data_shifted[96:103]) ^ (8'h02 * data_shifted[104:111]) ^ (8'h03 * data_shifted[112:119]) ^ (data_shifted[120:127]));
-    mixed_cols[112:119] = ((data_shifted[96:103]) ^ (data_shifted[104:111]) ^ (8'h02 * data_shifted[112:119]) ^ (8'h03 * data_shifted[120:127]));
-    mixed_cols[120:127] = ((8'h03 * data_shifted[96:103]) ^ (data_shifted[104:111]) ^ (data_shifted[112:119]) ^ (8'h02 * data_shifted[120:127]));
-    end
-endfunction
-
-//------------>>> Add Round Key function.
-function  [0:127] add_rnd_key;
-    input [0:127] data_mixed;
-    input [0:127] round_key;
-    begin
-    add_rnd_key = round_key ^ data_mixed;
     end
 endfunction
 

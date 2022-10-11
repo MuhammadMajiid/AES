@@ -18,13 +18,12 @@ module KeyExpansion
 );
 
 //-----------------Control signals-----------------\\
-wire [0:31] first_col;
-wire [0:31] second_col;
-wire [0:31] third_col;
-wire [0:31] fourth_col;
-wire [0:31] word;
-reg  [0:31] rcon;
-reg  [0:7]  sbox [0:255];
+wire [0:31]  first_col;
+wire [0:31]  second_col;
+wire [0:31]  third_col;
+wire [0:31]  fourth_col;
+wire [0:31]  word;
+reg  [0:7]   sbox [0:255];
 
 //-----------------Rcon encoded states-----------------\\
 localparam ROUND1  = 4'd1,
@@ -38,8 +37,35 @@ localparam ROUND1  = 4'd1,
            ROUND9  = 4'd9,
            ROUND10 = 4'd10;
 
-//-----------------Rcon LUT-----------------\\
-always @(*) begin
+//-----------------setting the coloumns-----------------\\
+assign first_col  = round_key[0:31];
+assign second_col = round_key[32:63];
+assign third_col  = round_key[64:95];
+assign fourth_col = round_key[96:127];
+
+//-----------------SubBytes and Shift operation on the last coloumn-----------------\\
+assign word       = key_sbox(fourth_col);
+
+//-----------------Next key logic-----------------\\
+always @(posedge clk) 
+begin
+    if (round_num == 4'd0) 
+    begin
+        round_key <= key;
+    end
+    else 
+    begin
+        round_key[0:31]   <= first_col ^ word ^ rcon(round_num);
+        round_key[32:63]  <= first_col ^ word ^ rcon(round_num) ^ second_col;
+        round_key[64:95]  <= first_col ^ word ^ rcon(round_num) ^ second_col ^ third_col;
+        round_key[96:127] <= first_col ^ word ^ rcon(round_num) ^ second_col ^ third_col ^ fourth_col;
+    end
+end
+
+//-----------------Function for the Rcon-----------------\\
+function  [0:31] rcon;
+    input [3:0] round_num;
+    begin
     case (round_num)
         ROUND1  : rcon = 32'h01_00_00_00;
         ROUND2  : rcon = 32'h02_00_00_00;
@@ -53,30 +79,8 @@ always @(*) begin
         ROUND10 : rcon = 32'h36_00_00_00;
         default : rcon = 32'h00_00_00_00;
     endcase
-end
-
-//-----------------setting the coloumns-----------------\\
-assign first_col  = key[0:31];
-assign second_col = key[32:63];
-assign third_col  = key[64:95];
-assign fourth_col = key[96:127];
-assign word       = key_sbox(fourth_col);
-
-//-----------------Next key logic-----------------\\
-always @(posedge clk) 
-begin
-    if(round_num == 4'd0)
-    begin
-        round_key         <= key;
     end
-    else 
-    begin
-        round_key[0:31]   <= first_col ^ word ^ rcon;
-        round_key[32:63]  <= first_col ^ word ^ rcon ^ second_col;
-        round_key[64:95]  <= first_col ^ word ^ rcon ^ second_col ^ third_col;
-        round_key[96:127] <= first_col ^ word ^ rcon ^ second_col ^ third_col ^ fourth_col;
-    end
-end
+endfunction
 
 //-----------------Function for the sbox-----------------\\
 function  [0:31] key_sbox;
@@ -339,10 +343,11 @@ function  [0:31] key_sbox;
         sbox[8'hfe] = 8'hbb;
         sbox[8'hff] = 8'h16;
 
-        key_sbox[0:7]   = sbox[fourth_col[0:7]];
-        key_sbox[8:15]  = sbox[fourth_col[8:15]];
-        key_sbox[16:23] = sbox[fourth_col[16:23]];
-        key_sbox[24:31] = sbox[fourth_col[24:31]];
+        key_sbox[0:7]   = sbox[fourth_col[8:15]];
+        key_sbox[8:15]  = sbox[fourth_col[16:23]];
+        key_sbox[16:23] = sbox[fourth_col[24:31]];
+        key_sbox[24:31] = sbox[fourth_col[0:7]];
+
     end 
 endfunction
 

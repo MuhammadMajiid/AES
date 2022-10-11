@@ -7,7 +7,7 @@
 //  KEYWORDS: AES Rounds, FSM, Sbox, Mix coloumns, Shift rows, Add Round Key.
 //  PURPOSE: An RTL modelling for the AES Top module.
 
-module Encoding 
+module Encryption 
 //-----------------Ports-----------------\\
 (
     input  wire clock,
@@ -16,8 +16,8 @@ module Encoding
     input  wire [0:127] plain_text,
     input  wire [0:127] key,
 
-    output reg [0:127] enc_data,
-    output reg         valid_flag
+    output wire [0:127] enc_data,
+    output wire         valid_flag
 );
 
 //-----------------Internal connections-----------------\\
