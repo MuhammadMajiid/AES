@@ -100,14 +100,15 @@ begin
         case(state)
             INITIALLY:
             begin
+                data_tobox   = add_rnd_key(plain_text,round_key);
                 count        = 4'd0;
                 round_num    = 4'd0;
-                data_tobox   = add_rnd_key(plain_text,round_key);
                 data_sub     = 128'd0;
                 data_shifted = 128'd0;
                 data_mixed   = 128'd0;
                 round_num    = round_num + 4'd1;
             end
+
             ROUNDS:
             begin
                 count        = count + 4'd1;
@@ -117,15 +118,27 @@ begin
                 data_tobox   = add_rnd_key(data_mixed,round_key);
                 round_num    = round_num + 4'd1;
             end
+
             FINAL:
             begin
-                round_num    = round_num + 4'd1;
                 count        = count + 4'd1;
                 data_sub     = data_sbox(data_tobox);
                 data_shifted = shift_rows(data_sub);
                 data_mixed   = data_shifted; 
                 data_tobox   = add_rnd_key(data_mixed,round_key);
+                round_num    = round_num + 4'd0;
             end
+
+            VALID:
+            begin
+                data_tobox    = 128'd0;
+                data_sub      = 128'd0;
+                data_shifted  = 128'd0;
+                data_mixed    = 128'd0;
+                count         = 4'd0;
+                round_num     = 4'd0;
+            end
+
             default:
                 begin
                     data_tobox    = 128'd0;
