@@ -28,7 +28,7 @@ end
 
 initial 
 begin
-    clk_tb = 1'b1;
+    clk_tb = 1'b0;
     forever  #10 clk_tb = ~ clk_tb;
 end
 
@@ -36,6 +36,7 @@ initial
 begin
     key_tb = 128'h0000_0000_0000_0000_0000_0000_0000_0000;
     round_num_tb = 4'd0;
+    #10;
     repeat(11)
     begin
         #20;

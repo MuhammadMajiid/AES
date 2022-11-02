@@ -10,7 +10,7 @@
 module KeyExpansion 
 //-----------------Ports-----------------\\
 (
-    input  wire         clk,
+    input  wire         rst_n,
     input  wire [3:0]   round_num,
     input  wire [0:127] key,
 
@@ -37,6 +37,22 @@ localparam ROUND1  = 4'd1,
            ROUND9  = 4'd9,
            ROUND10 = 4'd10;
 
+//-----------------Next key logic-----------------\\
+always @(round_num) 
+begin
+    if(round_num == 4'd0)
+    begin
+        round_key = key;
+    end
+    else 
+    begin
+        round_key[0:31]   = first_col ^ word ^ rcon(round_num);
+        round_key[32:63]  = first_col ^ word ^ rcon(round_num) ^ second_col;
+        round_key[64:95]  = first_col ^ word ^ rcon(round_num) ^ second_col ^ third_col;
+        round_key[96:127] = first_col ^ word ^ rcon(round_num) ^ second_col ^ third_col ^ fourth_col;
+    end
+end
+
 //-----------------setting the coloumns-----------------\\
 assign first_col  = round_key[0:31];
 assign second_col = round_key[32:63];
@@ -45,22 +61,6 @@ assign fourth_col = round_key[96:127];
 
 //-----------------SubBytes and Shift operation on the last coloumn-----------------\\
 assign word       = key_sbox(fourth_col);
-
-//-----------------Next key logic-----------------\\
-always @(posedge clk) 
-begin
-    if (round_num == 4'd0) 
-    begin
-        round_key <= key;
-    end
-    else 
-    begin
-        round_key[0:31]   <= first_col ^ word ^ rcon(round_num);
-        round_key[32:63]  <= first_col ^ word ^ rcon(round_num) ^ second_col;
-        round_key[64:95]  <= first_col ^ word ^ rcon(round_num) ^ second_col ^ third_col;
-        round_key[96:127] <= first_col ^ word ^ rcon(round_num) ^ second_col ^ third_col ^ fourth_col;
-    end
-end
 
 //-----------------Function for the Rcon-----------------\\
 function  [0:31] rcon;

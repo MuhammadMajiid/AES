@@ -31,7 +31,8 @@ end
 
 initial 
 begin
-    $monitor($time, ": Round Num. = %d     Data = %h    Encrypted Data = %h  ",rnd_num_tb ,text_tb, enc_tb);
+    #220;
+    $display($time, ": Round Num. = %d     Data = %h    Encrypted Data = %h  ",rnd_num_tb ,text_tb, enc_tb);
 end
 
 initial 
@@ -44,7 +45,7 @@ initial
 begin
     rst_tb = 1'b0;
     start_tb = 1'b0;
-    #1;
+    #10;
     rst_tb = 1'b1;
     start_tb = 1'b1;
 end
@@ -78,7 +79,7 @@ begin
 end
 
 initial begin
-    #210;
+    #220;
     if(enc_tb == 128'hc7d1_2419_489e_3b62_33a2_c5a7_f456_3172)
     begin
         $display("Encoded is done succesfully!");

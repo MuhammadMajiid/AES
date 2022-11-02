@@ -29,27 +29,21 @@ reg [0:127] data_shifted;
 reg [0:127] data_mixed;
 
 //-----------------State encoding-----------------\\
-localparam IDLE      = 2'b00,
-           INITIALLY = 2'b01,
+localparam INITIALLY = 2'b01,
            ROUNDS    = 2'b11,
-           FINAL     = 2'b10;
+           FINAL     = 2'b10,
+           VALID     = 2'b00;
 
-//-----------------AES FSM-----------------\\
+//-----------------AES FSM Transitions-----------------\\
 always @(posedge clk, negedge reset_n) 
 begin
     if (!reset_n) 
     begin
-        state         <= IDLE;
-        count         <= 4'd0;
-        round_num     <= 4'd0;
+        state            <= INITIALLY;
     end
     else 
     begin
         case (state)
-            IDLE:
-            begin
-                state            <= INITIALLY;
-            end
 
             INITIALLY:
             begin
@@ -59,84 +53,96 @@ begin
                 end
                 else
                 begin
-                    state        <= IDLE;
+                    state        <= INITIALLY;
                 end
-                round_num        <= round_num + 4'd1;
             end
 
             ROUNDS:
             begin
-                round_num        <= round_num + 4'd1;
-                if (count == 4'd9)
+                if (count == 4'd8)
                 begin
                     state        <= FINAL;
                 end
                 else 
                 begin
-                    count        <= count + 4'd1;
                     state        <= ROUNDS;
                 end
             end
 
             FINAL:
             begin
-                count            <= 4'd0;
-                round_num        <= 4'd0;
-                state            <= IDLE;
+                state            <= VALID;
             end
 
-            default: state       <= IDLE;
+            VALID:
+            begin
+                state            <= INITIALLY;
+            end
+
+            default: state       <= INITIALLY;
         endcase
     end
 end
 
-always @(round_num, state,reset_n)
+//-----------------AES FSM States logic-----------------\\
+always @(posedge clk, negedge reset_n)
 begin
-    if(!reset_n) 
-    begin
+    if (!reset_n) begin
         data_tobox    = 128'd0;
         data_sub      = 128'd0;
         data_shifted  = 128'd0;
         data_mixed    = 128'd0;
+        count         = 4'd0;
+        round_num     = 4'd0;
     end
-    else if (start & clk) 
+    else
     begin
-        if (state == INITIALLY) 
-        begin
-            data_tobox   = add_rnd_key(plain_text,round_key);    //  The initial ARK
-            data_sub     = data_sbox(data_tobox);
-            data_shifted = shift_rows(data_sub);
-            data_mixed   = mixed_cols(data_shifted);
-        end
-        else if (state == ROUNDS) 
-        begin
-            data_tobox   = add_rnd_key(data_mixed,round_key);
-            data_sub     = data_sbox(data_tobox);
-            data_shifted = shift_rows(data_sub);
-            data_mixed   = mixed_cols(data_shifted);
-            data_tobox   = add_rnd_key(data_mixed,round_key);
-        end
-        else 
-        begin
-            data_sub         = data_sbox(data_tobox);
-            data_shifted     = shift_rows(data_sub);
-            data_tobox       = add_rnd_key(data_shifted,round_key); //data_shifted ^ round_key
-        end
+        case(state)
+            INITIALLY:
+            begin
+                count        = 4'd0;
+                round_num    = 4'd0;
+                data_tobox   = add_rnd_key(plain_text,round_key);
+                data_sub     = 128'd0;
+                data_shifted = 128'd0;
+                data_mixed   = 128'd0;
+                round_num    = round_num + 4'd1;
+            end
+            ROUNDS:
+            begin
+                count        = count + 4'd1;
+                data_sub     = data_sbox(data_tobox);
+                data_shifted = shift_rows(data_sub);
+                data_mixed   = mixed_cols(data_shifted);
+                data_tobox   = add_rnd_key(data_mixed,round_key);
+                round_num    = round_num + 4'd1;
+            end
+            FINAL:
+            begin
+                round_num    = round_num + 4'd1;
+                count        = count + 4'd1;
+                data_sub     = data_sbox(data_tobox);
+                data_shifted = shift_rows(data_sub);
+                data_mixed   = data_shifted; 
+                data_tobox   = add_rnd_key(data_mixed,round_key);
+            end
+            default:
+                begin
+                    data_tobox    = 128'd0;
+                    data_sub      = 128'd0;
+                    data_shifted  = 128'd0;
+                    data_mixed    = 128'd0;
+                    count         = 4'd0;
+                    round_num     = 4'd0;
+                end
+        endcase
     end
-    else 
-    begin
-        data_tobox    = 128'd0;
-        data_sub      = 128'd0;
-        data_shifted  = 128'd0;
-        data_mixed    = 128'd0;
-    end
-    
 end
 
 //-----------------Output logic-----------------\\
 always @(*) 
 begin
-    valid_flag = (state == FINAL);
+    valid_flag = (state == VALID);
     enc_data   = (valid_flag)? data_tobox : 128'b0;
 end
 
@@ -170,7 +176,7 @@ endfunction
 function  [0:7] mulByTwo;
     input [0:7] arg;
     begin
-        if(arg[7]) mulByTwo = ((arg << 1) ^ 8'h1b);
+        if(arg[0]) mulByTwo = ((arg << 1) ^ 8'h1b);
         else mulByTwo = arg << 1;
     end
 endfunction
@@ -213,10 +219,10 @@ endfunction
 
 //------------>>> Add Round Key function.
 function  [0:127] add_rnd_key;
-    input [0:127] data_mixed;
-    input [0:127] round_key;
+    input [0:127] arg1;
+    input [0:127] arg2;
     begin
-    add_rnd_key = round_key ^ data_mixed;
+    add_rnd_key = arg1 ^ arg2;
     end
 endfunction
 

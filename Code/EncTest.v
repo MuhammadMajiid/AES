@@ -28,10 +28,10 @@ begin
     $dumpvars;
 end
 
-initial 
-begin
-    $monitor($time, ": Data = %h    Encrypted Data = %h  ", plain_text_tb, enc_data_tb);
-end
+// initial 
+// begin
+//     $monitor($time, ": Data = %h    Encrypted Data = %h  ", plain_text_tb, enc_data_tb);
+// end
 
 initial 
 begin
@@ -43,9 +43,8 @@ initial
 begin
     rst_n_tb = 1'b0;
     start_tb = 1'b0;
-    #1;
+    #10;
     rst_n_tb = 1'b1;
-    #9;
     start_tb = 1'b1;
 end
 
@@ -53,11 +52,16 @@ initial
 begin
     plain_text_tb = 128'h0000_0101_0303_0707_0f0f_1f1f_3f3f_7f7f;
     key_tb = 128'h0000_0000_0000_0000_0000_0000_0000_0000;
-    #230;
+    #220;
     if(enc_data_tb == 128'hc7d1_2419_489e_3b62_33a2_c5a7_f456_3172)
+    begin
         $display("Encoded is done succesfully!");
+    end
     else
+    begin
         $display("Encoded failed!");
+    end
+
 end
 
 endmodule
