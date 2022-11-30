@@ -10,7 +10,6 @@
 module KeyExpansion 
 //-----------------Ports-----------------\\
 (
-    input  wire         rst_n,
     input  wire [3:0]   round_num,
     input  wire [0:127] key,
 

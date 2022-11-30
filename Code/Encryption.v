@@ -39,7 +39,6 @@ Rounds rnds(
 );
 
 KeyExpansion ke(
-    .rst_n(reset_n),
     .round_num(round_num_w),
     .key(key),
 

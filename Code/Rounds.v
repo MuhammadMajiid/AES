@@ -89,9 +89,9 @@ always @(posedge clk, negedge reset_n)
 begin
     if (!reset_n) begin
         data_tobox    = 128'd0;
-        data_sub      = 128'd0;
-        data_shifted  = 128'd0;
-        data_mixed    = 128'd0;
+//        data_sub      = 128'd0;
+//        data_shifted  = 128'd0;
+//        data_mixed    = 128'd0;
         count         = 4'd0;
         round_num     = 4'd0;
     end
@@ -103,9 +103,9 @@ begin
                 data_tobox   = add_rnd_key(plain_text,round_key);
                 count        = 4'd0;
                 round_num    = 4'd0;
-                data_sub     = 128'd0;
-                data_shifted = 128'd0;
-                data_mixed   = 128'd0;
+//                data_sub     = 128'd0;
+//                data_shifted = 128'd0;
+//                data_mixed   = 128'd0;
                 round_num    = round_num + 4'd1;
             end
 
