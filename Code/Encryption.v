@@ -1,7 +1,7 @@
 //  AUTHOR: Mohamed Maged Elkholy.
 //  INFO.: Undergraduate ECE student, Alexandria university, Egypt.
 //  AUTHOR'S EMAIL: majiidd17@icloud.com
-//  FILE NAME: Encoding.v
+//  FILE NAME: Encryption.v
 //  TYPE: module.
 //  DATE: 12/10/2022
 //  KEYWORDS: AES Rounds, FSM, Sbox, Mix coloumns, Shift rows, Add Round Key.
